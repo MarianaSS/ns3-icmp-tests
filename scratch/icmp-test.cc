@@ -1,3 +1,64 @@
+/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * Copyright (c) 2019 Ritsumeikan University, Shiga, Japan.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * Author: Alberto Gallegos Ramonet <ramonet@fc.ritsumei.ac.jp>
+ */
+
+// Test program for the Internet Control Message Protocol (ICMP) responses.
+//
+// IcmpEchoReplyTestCase scenario:
+//
+//               n0 <------------------> n1
+//              i(0,0)                 i(1,0)
+//
+//        Test that sends a single ICMP echo packet with TTL = 1 from n0 to n1,
+//        n1 receives the packet and send an ICMP echo reply.
+//
+//
+// IcmpTimeExceedTestCase scenario:
+//
+//                           channel1            channel2
+//               n0 <------------------> n1 <---------------------> n2
+//              i(0,0)                 i(1,0)                     i2(1,0)
+//                                     i2(0,0)
+//
+//         Test that sends a single ICMP echo packet with TTL = 1 from n0 to n4,
+//         however, the TTL is not enough and n1 reply to n0 with an ICMP time exceed.
+//
+//
+// IcmpV6EchoReplyTestCase scenario:
+//
+//               n0 <-------------------> n1
+//              i(0,1)                  i(1,1)
+//
+//         Test that sends a single ICMPV6 ECHO request with hopLimit = 1 from n0 to n1,
+//         n1 receives the packet and send an ICMPV6 echo reply.
+//
+// IcmpV6TimeExceedTestCase scenario:
+//
+//                        channel1                channel2
+//               n0 <------------------> n1 <---------------------> n2
+//              i(0,0)                  i(1,0)                    i2(1,0)
+//                                      i2(0,0)
+//
+//         Test that sends a single ICMPV6 echo packet with hopLimit = 1 from n0 to n4,
+//         however, the hopLimit is not enough and n1 reply to n0 with an ICMPV6 time exceed error.
+
+
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv6-address-helper.h"
 #include "ns3/simple-net-device.h"
@@ -70,21 +131,23 @@ IcmpEchoReplyTestCase::~IcmpEchoReplyTestCase ()
 void
 IcmpEchoReplyTestCase::DoSendData (Ptr<Socket> socket, Ipv4Address dst)
 {
+  printf("Iniciando IcmpEchoReplyTestCase... \n\n");
   
   Ptr<Packet> p = Create<Packet> ();
   Icmpv4Echo echo;
   echo.SetSequenceNumber (1);
   echo.SetIdentifier (0);
   p->AddHeader (echo);
-  printf("Enviando echo reply: \n");
+  printf("Enviando echo request: \n");
   echo.Print(std::cout);
-  printf("\n");
+  printf("\n\n");
 
   Icmpv4Header header;
   header.SetType (Icmpv4Header::ICMPV4_ECHO);
   header.SetCode (0);
   p->AddHeader (header);
   
+  printf("Cabeçalho da mensagem: \n");
   header.Print(std::cout);
 
   Address realTo = InetSocketAddress (dst, 1234);
@@ -109,15 +172,21 @@ IcmpEchoReplyTestCase::ReceivePkt (Ptr <Socket> socket)
 {
   Address from;
   Ptr<Packet> p = socket->RecvFrom (0xffffffff, 0, from);
-  printf("\n recebeu o pacote \n");
+  printf("\n\n recebeu o pacote Echo Reply \n\n");
   
   m_receivedPacket = p->Copy ();
 
   Ipv4Header ipv4;
+  printf("Header do ipv4: \n");
+  ipv4.Print(std::cout);
+  printf("\n \n");
   p->RemoveHeader (ipv4);
   NS_TEST_EXPECT_MSG_EQ (ipv4.GetProtocol (), 1," The received Packet is not an ICMP packet");
 
   Icmpv4Header icmp;
+  printf("Header do icmp: \n");
+  icmp.Print(std::cout);
+  printf("\n \n");
   p->RemoveHeader (icmp);
 
   NS_TEST_EXPECT_MSG_EQ (icmp.GetType (), Icmpv4Header::ICMPV4_ECHO_REPLY,
@@ -128,8 +197,6 @@ IcmpEchoReplyTestCase::ReceivePkt (Ptr <Socket> socket)
 void
 IcmpEchoReplyTestCase::DoRun ()
 {
-
-  printf("Iniciando IcmpEchoReplyTestCase... \n");
   NodeContainer n;
   n.Create (2);
 
@@ -168,7 +235,6 @@ IcmpEchoReplyTestCase::DoRun ()
   NS_TEST_EXPECT_MSG_EQ (m_receivedPacket->GetSize (), 28, " Unexpected ICMPV4_ECHO_REPLY packet size");
 
 
-  printf("Fim do IcmpEchoReplyTestCase... \n");
   Simulator::Destroy ();
 }
 
@@ -189,7 +255,7 @@ public:
   void DoSendData (Ptr<Socket> socket, Ipv4Address dst);
   void ReceivePkt (Ptr<Socket> socket);
 
-public:
+private:
   virtual void DoRun (void);
   Ptr<Packet> m_receivedPacket;
 
@@ -265,8 +331,6 @@ IcmpTimeExceedTestCase::ReceivePkt (Ptr<Socket> socket)
 void
 IcmpTimeExceedTestCase::DoRun ()
 {
-
-  printf("Iniciando IcmpTimeExceedTestCase... \n");
   NodeContainer n, n0n1,n1n2;
   n.Create (3);
   n0n1.Add (n.Get (0));
@@ -315,7 +379,6 @@ IcmpTimeExceedTestCase::DoRun ()
 
   NS_TEST_EXPECT_MSG_EQ (m_receivedPacket->GetSize (), 56, " Unexpected ICMP Time Exceed Response packet size");
 
-  printf("Fim do IcmpTimeExceedTestCase... \n");
   Simulator::Destroy ();
 }
 
@@ -336,7 +399,7 @@ public:
   void DoSendData (Ptr<Socket> socket, Ipv6Address dst);
   void ReceivePkt (Ptr<Socket> socket);
 
-public:
+private:
   virtual void DoRun (void);
   Ptr<Packet> m_receivedPacket;
 
@@ -419,8 +482,6 @@ IcmpV6EchoReplyTestCase::ReceivePkt (Ptr <Socket> socket)
 void
 IcmpV6EchoReplyTestCase::DoRun ()
 {
-
-  printf("Iniciando IcmpV6EchoReplyTestCase... \n");
   NodeContainer n;
   n.Create (2);
 
@@ -461,7 +522,6 @@ IcmpV6EchoReplyTestCase::DoRun ()
 
   NS_TEST_EXPECT_MSG_EQ (m_receivedPacket->GetSize (), 72, " Unexpected ICMPV6_ECHO_REPLY packet size");
 
-  printf("Fim do IcmpV6EchoReplyTestCase... \n");
   Simulator::Destroy ();
 }
 
@@ -566,7 +626,6 @@ IcmpV6TimeExceedTestCase::ReceivePkt (Ptr <Socket> socket)
 void
 IcmpV6TimeExceedTestCase::DoRun ()
 {
-  printf("Iniciando IcmpV6TimeExceedTestCase... \n");
   NodeContainer n, n0n1,n1n2;
   n.Create (3);
   n0n1.Add (n.Get (0));
@@ -623,7 +682,6 @@ IcmpV6TimeExceedTestCase::DoRun ()
   NS_TEST_EXPECT_MSG_EQ (m_receivedPacket->GetSize (), 72, " Unexpected ICMPV6_ECHO_REPLY packet size");
 
 
-  printf("Fim do IcmpV6TimeExceedTestCase... \n");
   Simulator::Destroy ();
 }
 
@@ -653,19 +711,9 @@ static IcmpTestSuite icmpTestSuite; //!< Static variable for test initialization
 
 int main (int argc, char *argv[])
 {
-  IcmpEchoReplyTestCase icmpEchoReplyTest;
-  icmpEchoReplyTest.DoRun();
-
-  IcmpTimeExceedTestCase icmpTimeExceedTest;
-  icmpTimeExceedTest.DoRun();
-
-  IcmpV6EchoReplyTestCase icmpV6EchoReplyTest;
-  icmpV6EchoReplyTest.DoRun();
-
-  IcmpV6TimeExceedTestCase icmpV6TimeExceedTest;
-  icmpV6TimeExceedTest.DoRun();
+  IcmpEchoReplyTestCase icmp;
+  icmp.DoRun();
   
   printf("\n fim do main ");
   return 0;
 }
-
